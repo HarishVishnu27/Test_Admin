@@ -1,0 +1,610 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Traffic Monitoring Dashboard</title>
+    <link href="{{ url_for('static', filename='css/tailwind.min.css') }}" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        body {
+            background-color: #f3f4f6;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        .camera-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1.5rem;
+        }
+        .camera-container {
+            position: relative;
+            background-color: #1f2937;
+            border-radius: 1rem;
+            overflow: hidden;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            height: 100%;
+        }
+        .camera-container:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+        }
+        .camera-feed {
+            position: relative;
+            background-color: black;
+            width: 100%;
+            height: 320px;
+            overflow: hidden;
+        }
+        .camera-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            padding: 0.5rem 1rem;
+            background: linear-gradient(90deg, rgba(0,0,0,0.7) 0%, rgba(0,0,0,0) 100%);
+            color: white;
+            border-radius: 0 0 1rem 0;
+            font-size: 0.9rem;
+            font-weight: bold;
+            z-index: 10;
+            width: 50%;
+        }
+        .timestamp {
+            position: absolute;
+            bottom: 0.5rem;
+            right: 0.5rem;
+            background-color: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 0.25rem 0.5rem;
+            border-radius: 0.25rem;
+            font-size: 0.8rem;
+            z-index: 10;
+        }
+        .stats-card {
+            border-radius: 1rem;
+            overflow: hidden;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            background: linear-gradient(135deg, #4f46e5 0%, #7e22ce 100%);
+            color: white;
+        }
+        .stats-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 15px rgba(0, 0, 0, 0.2);
+        }
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background-color: #e5e7eb;
+            border-radius: 4px;
+            overflow: hidden;
+            margin-top: 4px;
+        }
+        .progress-fill {
+            height: 100%;
+            border-radius: 4px;
+            transition: width 0.3s ease;
+        }
+        .status-indicator {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 0.5rem;
+        }
+        .loading-spinner {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 50px;
+            height: 50px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top: 3px solid #fff;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: translate(-50%, -50%) rotate(0deg); }
+            100% { transform: translate(-50%, -50%) rotate(360deg); }
+        }
+        .pulse-dot {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            background-color: #10B981;
+            border-radius: 50%;
+            animation: pulse 1.5s infinite;
+        }
+        @keyframes pulse {
+            0% { transform: scale(0.8); opacity: 0.7; }
+            50% { transform: scale(1.2); opacity: 1; }
+            100% { transform: scale(0.8); opacity: 0.7; }
+        }
+        .nav-link {
+            position: relative;
+            transition: all 0.3s ease;
+        }
+        .nav-link::after {
+            content: '';
+            position: absolute;
+            bottom: -4px;
+            left: 0;
+            width: 0;
+            height: 2px;
+            background-color: #fff;
+            transition: width 0.3s ease;
+        }
+        .nav-link:hover::after {
+            width: 100%;
+        }
+        .date-time-display {
+            background: linear-gradient(90deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.05) 100%);
+            backdrop-filter: blur(5px);
+            border-radius: 0.5rem;
+            padding: 0.5rem 1rem;
+            border: 1px solid rgba(255,255,255,0.1);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .header-backdrop {
+            backdrop-filter: blur(10px);
+            background: rgba(31, 41, 55, 0.95);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+        }
+        .announcement-banner {
+            background: linear-gradient(90deg, #4f46e5 0%, #7e22ce 100%);
+            color: white;
+            text-align: center;
+            padding: 0.75rem;
+            font-weight: 500;
+        }
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 60px;
+            height: 30px;
+        }
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: .4s;
+            border-radius: 34px;
+        }
+        .toggle-slider:before {
+            position: absolute;
+            content: "";
+            height: 22px;
+            width: 22px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+        input:checked + .toggle-slider {
+            background-color: #4f46e5;
+        }
+        input:checked + .toggle-slider:before {
+            transform: translateX(30px);
+        }
+        .camera-stats-summary {
+            background: linear-gradient(135deg, rgba(79, 70, 229, 0.1) 0%, rgba(16, 185, 129, 0.1) 100%);
+            border-radius: 0.75rem;
+            padding: 0.75rem;
+            border: 1px solid rgba(79, 70, 229, 0.2);
+        }
+        .vdc-active {
+            background-color: #10B981;
+        }
+        .vdc-inactive {
+            background-color: #6B7280;
+        }
+    </style>
+</head>
+<body class="bg-gray-100">
+    <div class="announcement-banner">
+        <div class="container mx-auto px-4">
+            <p>
+                <i class="fas fa-info-circle mr-2"></i>
+                Current Date: <span id="current-date">2025-05-31</span> | Welcome back, <strong>{{ session.get('username', 'Guest') }}</strong>!
+            </p>
+        </div>
+    </div>
+
+    <header class="header-backdrop text-white p-4 sticky top-0 z-50">
+        <div class="container mx-auto flex justify-between items-center">
+            <div class="flex items-center">
+                <div class="mr-3">
+                    <i class="fas fa-traffic-light text-2xl text-blue-400"></i>
+                </div>
+                <div>
+                    <h1 class="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-600">Traffic Monitoring Dashboard</h1>
+                    <div class="flex items-center mt-1 text-sm text-gray-300">
+                        <span class="pulse-dot mr-2"></span>
+                        <span>Live monitoring system</span>
+                        <span class="mx-2">•</span>
+                        <span id="current-time" class="date-time-display">12:00:55 UTC</span>
+                    </div>
+                </div>
+            </div>
+            <nav class="hidden md:flex space-x-6 items-center">
+                <a href="{{ url_for('index') }}" class="nav-link text-white hover:text-gray-300 flex items-center">
+                    <i class="fas fa-home mr-1"></i> Home
+                </a>
+                <a href="{{ url_for('analytics') }}" class="nav-link text-white hover:text-gray-300 flex items-center">
+                    <i class="fas fa-chart-bar mr-1"></i> Analytics
+                </a>
+                <a href="{{ url_for('admin_panel') }}" class="nav-link text-white hover:text-gray-300 flex items-center">
+                    <i class="fas fa-cog mr-1"></i> Admin Panel
+                </a>
+                <a href="{{ url_for('logout') }}" class="bg-gradient-to-r from-red-500 to-pink-600 hover:from-red-600 hover:to-pink-700 text-white font-bold py-2 px-4 rounded-lg flex items-center transition duration-300 ease-in-out">
+                    <i class="fas fa-sign-out-alt mr-1"></i> Logout
+                </a>
+            </nav>
+            <div class="md:hidden">
+                <button id="mobile-menu-button" class="text-white">
+                    <i class="fas fa-bars text-xl"></i>
+                </button>
+            </div>
+        </div>
+        <!-- Mobile menu -->
+        <div id="mobile-menu" class="hidden md:hidden mt-4 pt-4 border-t border-gray-700">
+            <nav class="flex flex-col space-y-3">
+                <a href="{{ url_for('index') }}" class="text-white hover:text-gray-300 flex items-center">
+                    <i class="fas fa-home mr-1"></i> Home
+                </a>
+                <a href="{{ url_for('analytics') }}" class="text-white hover:text-gray-300 flex items-center">
+                    <i class="fas fa-chart-bar mr-1"></i> Analytics
+                </a>
+                <a href="{{ url_for('admin_panel') }}" class="text-white hover:text-gray-300 flex items-center">
+                    <i class="fas fa-cog mr-1"></i> Admin Panel
+                </a>
+                <a href="{{ url_for('logout') }}" class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded text-center">
+                    <i class="fas fa-sign-out-alt mr-1"></i> Logout
+                </a>
+            </nav>
+        </div>
+    </header>
+
+    <main class="container mx-auto py-6 px-4 md:px-0">
+        <div class="bg-white rounded-lg shadow-lg p-6 mb-8">
+            <div class="flex flex-wrap items-center justify-between">
+                <h2 class="text-2xl font-bold text-gray-800 mb-4 md:mb-0">
+                    <i class="fas fa-tachometer-alt mr-2 text-indigo-600"></i>
+                    System Dashboard
+                </h2>
+                <div class="flex items-center space-x-4">
+                    <div class="flex items-center">
+                        <span class="text-sm text-gray-600 mr-2">Auto-refresh:</span>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="auto-refresh" checked>
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                    <button id="refresh-all" class="bg-indigo-600 hover:bg-indigo-700 text-white py-2 px-4 rounded-lg flex items-center">
+                        <i class="fas fa-sync-alt mr-2"></i>
+                        Refresh All
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Stats Cards Row -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            {% for cam_id in range(1, 5) %}
+            <div class="stats-card">
+                <div class="p-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-lg font-bold flex items-center">
+                            <i class="fas fa-video mr-2"></i>
+                            Camera {{ cam_id }}
+                        </h3>
+                        <div class="bg-white bg-opacity-20 p-2 rounded-full">
+                            <i class="fas fa-car-side text-xl"></i>
+                        </div>
+                    </div>
+
+                    <div class="text-3xl font-bold mb-2" id="vehicle-count-cam{{ cam_id }}">0</div>
+                    <div class="text-sm opacity-75 mb-4">Vehicles detected</div>
+
+                    <div class="mb-4">
+                        <div class="text-sm mb-1">Density:</div>
+                        <div class="font-medium" id="density-cam{{ cam_id }}">0%</div>
+                        <div class="progress-bar mt-2">
+                            <div id="density-progress-cam{{ cam_id }}" class="progress-fill bg-blue-300" style="width: 0%"></div>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center">
+                        <div id="vdc-indicator-cam{{ cam_id }}" class="status-indicator vdc-inactive"></div>
+                        <span id="vdc-status-cam{{ cam_id }}">VDC{{ cam_id }}: Inactive</span>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        <!-- Camera Feed Grid -->
+        <div class="camera-grid">
+            {% for cam_id in range(1, 5) %}
+            <div class="camera-container">
+                <div class="p-4 bg-gray-800 text-white flex justify-between items-center">
+                    <h2 class="text-lg font-bold flex items-center">
+                        <i class="fas fa-video mr-2"></i>
+                        Camera {{ cam_id }}
+                    </h2>
+                    <div class="flex items-center">
+                        <span id="status-indicator-cam{{ cam_id }}" class="status-indicator bg-green-500 mr-2"></span>
+                        <span id="status-text-cam{{ cam_id }}" class="text-sm">Live</span>
+                    </div>
+                </div>
+                <div class="camera-feed" id="cam{{ cam_id }}-container">
+                    <div class="loading-spinner" id="loader-cam{{ cam_id }}"></div>
+                    {% if latest_images['cam' ~ cam_id] %}
+                        <img src="{{ url_for('static', filename='processed/cam' ~ cam_id ~ '/' ~ latest_images['cam' ~ cam_id]) }}"
+                             alt="Camera {{ cam_id }}"
+                             id="cam{{ cam_id }}-feed"
+                             class="w-full h-full object-cover">
+                    {% else %}
+                        <div class="flex items-center justify-center h-full text-white">
+                            <p>No image available</p>
+                        </div>
+                    {% endif %}
+                    <div class="camera-overlay">
+                        <span class="font-bold">Camera {{ cam_id }}</span>
+                    </div>
+                    <div class="timestamp" id="timestamp-cam{{ cam_id }}">
+                        Updating...
+                    </div>
+                </div>
+                <div class="p-4 bg-gray-800 text-white">
+                    <div class="camera-stats-summary">
+                        <div class="flex justify-between mb-2">
+                            <span class="text-sm">Last updated:</span>
+                            <span class="font-medium" id="last-updated-cam{{ cam_id }}">--</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-sm">Processing time:</span>
+                            <span class="font-medium" id="processing-time-cam{{ cam_id }}">--</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </main>
+
+    <footer class="bg-gray-800 text-white py-6 mt-8">
+        <div class="container mx-auto px-4">
+            <div class="flex flex-col md:flex-row justify-between items-center">
+                <div class="mb-4 md:mb-0">
+                    <p>&copy; 2025 Traffic Monitoring System. All rights reserved.</p>
+                </div>
+                <div class="flex space-x-4">
+                    <a href="{{ url_for('analytics') }}" class="bg-indigo-600 hover:bg-indigo-700 text-white py-2 px-4 rounded-lg flex items-center">
+                        <i class="fas fa-chart-line mr-2"></i>
+                        View Detailed Analytics
+                    </a>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        // Mobile menu toggle
+        document.getElementById('mobile-menu-button').addEventListener('click', function() {
+            const menu = document.getElementById('mobile-menu');
+            menu.classList.toggle('hidden');
+        });
+
+        // Update current date and time
+        function updateDateTime() {
+            const now = new Date();
+
+            // Update time
+            const hours = String(now.getHours()).padStart(2, '0');
+            const minutes = String(now.getMinutes()).padStart(2, '0');
+            const seconds = String(now.getSeconds()).padStart(2, '0');
+            document.getElementById('current-time').textContent = `${hours}:${minutes}:${seconds} UTC`;
+
+            // Update date
+            const year = now.getFullYear();
+            const month = String(now.getMonth() + 1).padStart(2, '0');
+            const day = String(now.getDate()).padStart(2, '0');
+            document.getElementById('current-date').textContent = `${year}-${month}-${day}`;
+        }
+
+        // Initial datetime update
+        updateDateTime();
+
+        // Update time every second
+        setInterval(updateDateTime, 1000);
+
+        // Function to update camera stats
+        async function updateCameraStats() {
+            try {
+                const response = await fetch('/CameraStats');
+                if (!response.ok) throw new Error('Failed to fetch data');
+                const data = await response.json();
+
+                // Update each camera's stats
+                for (let camId = 1; camId <= 4; camId++) {
+                    const camData = data.cameras[`cam${camId}`];
+                    if (camData && !camData.status) {
+                        // Update vehicle count
+                        document.getElementById(`vehicle-count-cam${camId}`).textContent =
+                            camData.vehicle_count || '0';
+
+                        // Update density
+                        const density = camData.density || 0;
+                        document.getElementById(`density-cam${camId}`).textContent =
+                            `${density.toFixed(1)}%`;
+
+                        // Update density progress bar
+                        document.getElementById(`density-progress-cam${camId}`).style.width =
+                            `${density}%`;
+
+                        // Update color of progress bar based on density
+                        const progressBar = document.getElementById(`density-progress-cam${camId}`);
+                        if (density < 30) {
+                            progressBar.className = "progress-fill bg-green-500";
+                        } else if (density < 70) {
+                            progressBar.className = "progress-fill bg-yellow-500";
+                        } else {
+                            progressBar.className = "progress-fill bg-red-500";
+                        }
+
+                        // Update last updated timestamp
+                        if (camData.timestamp) {
+                            const date = new Date(camData.timestamp);
+                            document.getElementById(`last-updated-cam${camId}`).textContent =
+                                date.toLocaleTimeString();
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error('Error updating camera stats:', error);
+            }
+        }
+
+        // Function to update VDC status
+        async function updateVDC() {
+            try {
+                const response = await fetch('/VehicleDetect');
+                if (!response.ok) throw new Error('Failed to fetch VDC data');
+                const data = await response.json();
+
+                for (let camId = 1; camId <= 4; camId++) {
+                    const vdcActive = data[`vdc${camId}`] === 1;
+                    const indicator = document.getElementById(`vdc-indicator-cam${camId}`);
+                    const status = document.getElementById(`vdc-status-cam${camId}`);
+
+                    if (vdcActive) {
+                        indicator.classList.remove('vdc-inactive');
+                        indicator.classList.add('vdc-active');
+                        status.textContent = `VDC${camId}: Active`;
+                    } else {
+                        indicator.classList.remove('vdc-active');
+                        indicator.classList.add('vdc-inactive');
+                        status.textContent = `VDC${camId}: Inactive`;
+                    }
+                }
+            } catch (error) {
+                console.error('Error updating VDC:', error);
+            }
+        }
+
+        // Function to update camera feeds
+        function updateCameraFeeds() {
+            for (let camId = 1; camId <= 4; camId++) {
+                // Show loading indicator
+                const loader = document.getElementById(`loader-cam${camId}`);
+                if (loader) loader.style.display = 'block';
+
+                const statusIndicator = document.getElementById(`status-indicator-cam${camId}`);
+                const statusText = document.getElementById(`status-text-cam${camId}`);
+
+                if (statusIndicator && statusText) {
+                    statusIndicator.classList.remove('bg-green-500', 'bg-red-500');
+                    statusIndicator.classList.add('bg-yellow-500');
+                    statusText.textContent = "Updating...";
+                }
+
+                {% for cam_id in range(1, 5) %}
+                const cam{{ cam_id }}Feed = document.getElementById('cam{{ cam_id }}-feed');
+                if (cam{{ cam_id }}Feed) {
+                    const timestamp = new Date().getTime();
+                    cam{{ cam_id }}Feed.src = "{{ url_for('static', filename='processed/cam' ~ cam_id ~ '/' ~ latest_images['cam' ~ cam_id]) if latest_images['cam' ~ cam_id] }}?t=" + timestamp;
+
+                    // Update timestamp
+                    document.getElementById(`timestamp-cam{{ cam_id }}`).textContent =
+                        `Updated: ${new Date().toLocaleTimeString()}`;
+
+                    // Hide loader and update status once image is loaded
+                    cam{{ cam_id }}Feed.onload = function() {
+                        const loader = document.getElementById('loader-cam{{ cam_id }}');
+                        if (loader) loader.style.display = 'none';
+
+                        const statusIndicator = document.getElementById('status-indicator-cam{{ cam_id }}');
+                        const statusText = document.getElementById('status-text-cam{{ cam_id }}');
+
+                        if (statusIndicator && statusText) {
+                            statusIndicator.classList.remove('bg-yellow-500');
+                            statusIndicator.classList.add('bg-green-500');
+                            statusText.textContent = "Live";
+                        }
+                    };
+
+                    // Handle image load error
+                    cam{{ cam_id }}Feed.onerror = function() {
+                        const loader = document.getElementById('loader-cam{{ cam_id }}');
+                        if (loader) loader.style.display = 'none';
+
+                        const statusIndicator = document.getElementById('status-indicator-cam{{ cam_id }}');
+                        const statusText = document.getElementById('status-text-cam{{ cam_id }}');
+
+                        if (statusIndicator && statusText) {
+                            statusIndicator.classList.remove('bg-yellow-500');
+                            statusIndicator.classList.add('bg-red-500');
+                            statusText.textContent = "Error";
+                        }
+                    };
+                }
+                {% endfor %}
+            }
+        }
+
+        // Function to update all stats and camera feeds
+        async function updateAllStats() {
+            await Promise.all([
+                updateVDC(),
+                updateCameraStats()
+            ]);
+            updateCameraFeeds();
+        }
+
+        // Initial update
+        updateAllStats();
+
+        // Auto refresh toggle
+        let refreshInterval;
+        const autoRefreshToggle = document.getElementById('auto-refresh');
+
+        function toggleAutoRefresh() {
+            if (autoRefreshToggle.checked) {
+                refreshInterval = setInterval(updateAllStats, 5000);
+            } else {
+                clearInterval(refreshInterval);
+            }
+        }
+
+        autoRefreshToggle.addEventListener('change', toggleAutoRefresh);
+        toggleAutoRefresh(); // Initialize based on default state
+
+        // Refresh all button
+        document.getElementById('refresh-all').addEventListener('click', function() {
+            // Add spinning animation to the icon
+            const icon = this.querySelector('i');
+            icon.classList.add('fa-spin');
+
+            // Update all camera feeds
+            updateAllStats();
+
+            // Remove spinning animation after 1.5 seconds
+            setTimeout(() => {
+                icon.classList.remove('fa-spin');
+            }, 1500);
+        });
+    </script>
+</body>
+</html>

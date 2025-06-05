@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Panel - Traffic Monitoring System</title>
+    <link href="{{ url_for('static', filename='css/tailwind.min.css') }}" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <script src="{{ url_for('static', filename='js/konva.min.js') }}"></script>
+    <style>
+        body {
+            background-color: #f3f4f6;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        .header-backdrop {
+            backdrop-filter: blur(10px);
+            background: rgba(31, 41, 55, 0.95);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+        }
+
+        .announcement-banner {
+            background: linear-gradient(90deg, #4f46e5 0%, #7e22ce 100%);
+            color: white;
+            text-align: center;
+            padding: 0.75rem;
+            font-weight: 500;
+        }
+
+        .nav-link {
+            position: relative;
+            transition: all 0.3s ease;
+        }
+
+        .nav-link::after {
+            content: '';
+            position: absolute;
+            bottom: -4px;
+            left: 0;
+            width: 0;
+            height: 2px;
+            background-color: #fff;
+            transition: width 0.3s ease;
+        }
+
+        .nav-link:hover::after {
+            width: 100%;
+        }
+
+        .date-time-display {
+            background: linear-gradient(90deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.05) 100%);
+            backdrop-filter: blur(5px);
+            border-radius: 0.5rem;
+            padding: 0.5rem 1rem;
+            border: 1px solid rgba(255,255,255,0.1);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .pulse-dot {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            background-color: #10B981;
+            border-radius: 50%;
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(0.8); opacity: 0.7; }
+            50% { transform: scale(1.2); opacity: 1; }
+            100% { transform: scale(0.8); opacity: 0.7; }
+        }
+
+        .admin-panel-card {
+            background-color: white;
+            border-radius: 1rem;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .admin-panel-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+        }
+
+        .admin-btn {
+            transition: all 0.3s ease;
+        }
+
+        .admin-btn:hover {
+            transform: translateY(-2px);
+        }
+
+        .region-point {
+            position: absolute;
+            width: 12px;
+            height: 12px;
+            background-color: red;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            cursor: move;
+            box-shadow: 0 0 0 2px white;
+        }
+
+        .region-line {
+            position: absolute;
+            background-color: rgba(0, 255, 0, 0.5);
+            height: 2px;
+            transform-origin: 0 0;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="announcement-banner">
+        <div class="container mx-auto px-4">
+            <p>
+                <i class="fas fa-info-circle mr-2"></i>
+                Current Date: <span id="current-date">2025-05-31</span> | Admin Panel: <strong>{{ session.get('username', 'Guest') }}</strong>
+            </p>
+        </div>
+    </div>
+
+    <header class="header-backdrop text-white p-4 sticky top-0 z-50">
+        <div class="container mx-auto flex justify-between items-center">
+            <div class="flex items-center">
+                <div class="mr-3">
+                    <i class="fas fa-cog text-2xl text-blue-400 animate-spin-slow"></i>
+                </div>
+                <div>
+                    <h1 class="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-600">Admin Control Panel</h1>
+                    <div class="flex items-center mt-1 text-sm text-gray-300">
+                        <span class="pulse-dot mr-2"></span>
+                        <span>System configuration</span>
+                        <span class="mx-2">•</span>
+                        <span id="current-time" class="date-time-display">12:00:55 UTC</span>
+                    </div>
+                </div>
+            </div>
+            <nav class="hidden md:flex space-x-6 items-center">
+                <a href="{{ url_for('index') }}" class="nav-link text-white hover:text-gray-300 flex items-center">
+                    <i class="fas fa-home mr-1"></i> Home
+                </a>
+                <a href="{{ url_for('analytics') }}" class="nav-link text-white hover:text-gray-300 flex items-center">
+                    <i class="fas fa-chart-bar mr-1"></i> Analytics
+                </a>
+                <a href="{{ url_for('admin_panel') }}" class="nav-link text-white hover:text-gray-300 flex items-center">
+                    <i class="fas fa-cog mr-1"></i> Admin Panel
+                </a>
+                <a href="{{ url_for('logout') }}" class="bg-gradient-to-r from-red-500 to-pink-600 hover:from-red-600 hover:to-pink-700 text-white font-bold py-2 px-4 rounded-lg flex items-center transition duration-300 ease-in-out">
+                    <i class="fas fa-sign-out-alt mr-1"></i> Logout
+                </a>
+            </nav>
+            <div class="md:hidden">
+                <button id="mobile-menu-button" class="text-white">
+                    <i class="fas fa-bars text-xl"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Mobile menu -->
+        <div id="mobile-menu" class="hidden md:hidden mt-4 pt-4 border-t border-gray-700">
+            <nav class="flex flex-col space-y-3">
+                <a href="{{ url_for('index') }}" class="text-white hover:text-gray-300 flex items-center">
+                    <i class="fas fa-home mr-1"></i> Home
+                </a>
+                <a href="{{ url_for('analytics') }}" class="text-white hover:text-gray-300 flex items-center">
+                    <i class="fas fa-chart-bar mr-1"></i> Analytics
+                </a>
+                <a href="{{ url_for('admin_panel') }}" class="text-white hover:text-gray-300 flex items-center">
+                    <i class="fas fa-cog mr-1"></i> Admin Panel
+                </a>
+                <a href="{{ url_for('logout') }}" class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded text-center">
+                    <i class="fas fa-sign-out-alt mr-1"></i> Logout
+                </a>
+            </nav>
+        </div>
+    </header>
+
+    <main class="container mx-auto py-8 px-4 md:px-0">
+        <div class="admin-panel-card p-6 mb-8">
+            <h2 class="text-2xl font-bold text-gray-800 mb-4 flex items-center">
+                <i class="fas fa-map-marker-alt mr-2 text-indigo-600"></i>
+                Region Configuration
+            </h2>
+            <p class="text-gray-600 mb-4">
+                Configure detection regions for each camera. Click to place points and create polygons that define detection areas.
+            </p>
+
+         <center>   <div class="mb-6">
+                <label for="camera-select" class="block text-lg font-medium mb-2">Select Camera</label>
+                <select id="camera-select" class="p-2 border border-gray-300 rounded-md shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white">
+                    <option value="cam1">Camera 1</option>
+                    <option value="cam2">Camera 2</option>
+                    <option value="cam3">Camera 3</option>
+                    <option value="cam4">Camera 4</option>
+                </select>
+         </div></center>
+
+            <div id="canvas-container" class="relative mb-6 bg-gray-900 rounded-lg overflow-hidden shadow-lg border-2 border-gray-800">
+                <!-- The frame extracted from the backend -->
+                <img id="camera-frame" class="w-full max-w-full h-auto" />
+
+                <!-- The drawing layer will overlay exactly on the image -->
+                <div id="drawing-layer" class="absolute top-0 left-0"></div>
+            </div>
+<div class="flex justify-center flex-wrap gap-4 mt-6">
+    <button id="save-regions"
+        class="admin-btn bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white font-bold py-3 px-6 rounded-lg flex items-center">
+        <i class="fas fa-save mr-2"></i>
+        Save Regions
+    </button>
+
+    <button id="clear-regions"
+        class="admin-btn bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white font-bold py-3 px-6 rounded-lg flex items-center">
+        <i class="fas fa-trash-alt mr-2"></i>
+        Clear Regions
+    </button>
+
+    <button id="reload-camera"
+        class="admin-btn bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-bold py-3 px-6 rounded-lg flex items-center">
+        <i class="fas fa-sync mr-2"></i>
+        Reload Camera
+    </button>
+</div>
+
+        </div>
+
+        <div class="admin-panel-card p-6">
+    <h2 class="text-2xl font-bold text-gray-800 mb-4 flex items-center">
+        <i class="fas fa-sliders-h mr-2 text-indigo-600"></i>
+        System Configuration
+    </h2>
+
+    <!-- Grid for main settings -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <!-- Frame Skip Rate -->
+        <div>
+            <label for="frame-skip" class="block text-gray-700 mb-2">Frame Skip Rate</label>
+            <select id="frame-skip" class="w-full p-2 border border-gray-300 rounded-md">
+                <option value="4">4 frames</option>
+                <option value="6" selected>6 frames</option>
+                <option value="8">8 frames</option>
+                <option value="12">12 frames</option>
+            </select>
+        </div>
+
+        <!-- Processing Duration -->
+        <div>
+            <label for="process-duration" class="block text-gray-700 mb-2">Processing Duration (sec)</label>
+            <input type="number" id="process-duration" min="1" max="10" value="2"
+                   class="w-full p-2 border border-gray-300 rounded-md">
+        </div>
+    </div>
+
+</div>
+<center>
+            <button id="save-config" class="mt-6 admin-btn bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white font-bold py-3 px-6 rounded-lg flex items-center">
+                <i class="fas fa-save mr-2"></i>
+                Save Configuration
+            </button></center>
+        </div>
+    </main>
+
+    <footer class="bg-gray-800 text-white py-6 mt-8">
+        <div class="container mx-auto px-4">
+            <div class="flex flex-col md:flex-row justify-between items-center">
+                <div class="mb-4 md:mb-0">
+                    <p>&copy; 2025 Traffic Monitoring System. All rights reserved.</p>
+                </div>
+                <div class="flex space-x-4">
+                    <a href="{{ url_for('index') }}" class="bg-indigo-600 hover:bg-indigo-700 text-white py-2 px-4 rounded-lg flex items-center">
+                        <i class="fas fa-home mr-2"></i>
+                        Return to Dashboard
+                    </a>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="fixed bottom-4 right-4 z-50 bg-gray-800 text-white px-4 py-2 rounded-lg shadow-lg hidden">
+        <span id="toast-message"></span>
+    </div>
+
+    <script>
+        // Mobile menu toggle
+        document.getElementById('mobile-menu-button').addEventListener('click', function() {
+            const menu = document.getElementById('mobile-menu');
+            menu.classList.toggle('hidden');
+        });
+
+        // Update current date and time
+        function updateDateTime() {
+            const now = new Date();
+
+            // Update time
+            const hours = String(now.getHours()).padStart(2, '0');
+            const minutes = String(now.getMinutes()).padStart(2, '0');
+            const seconds = String(now.getSeconds()).padStart(2, '0');
+            document.getElementById('current-time').textContent = `${hours}:${minutes}:${seconds} UTC`;
+
+            // Update date
+            const year = now.getFullYear();
+            const month = String(now.getMonth() + 1).padStart(2, '0');
+            const day = String(now.getDate()).padStart(2, '0');
+            document.getElementById('current-date').textContent = `${year}-${month}-${day}`;
+        }
+
+        // Initial datetime update
+        updateDateTime();
+
+        // Update time every second
+        setInterval(updateDateTime, 1000);
+
+        const frameElement = document.getElementById('camera-frame');
+        const drawingLayer = document.getElementById('drawing-layer');
+        let regions = [];
+        let currentCamera = 'cam1';
+
+        // Show toast message
+        function showToast(message, type = 'success') {
+            const toast = document.getElementById('toast');
+            const toastMessage = document.getElementById('toast-message');
+
+            toastMessage.textContent = message;
+
+            // Set color based on type
+            if (type === 'success') {
+                toast.className = 'fixed bottom-4 right-4 z-50 bg-green-600 text-white px-4 py-2 rounded-lg shadow-lg flex items-center';
+                toastMessage.innerHTML = '<i class="fas fa-check-circle mr-2"></i>' + message;
+            } else if (type === 'error') {
+                toast.className = 'fixed bottom-4 right-4 z-50 bg-red-600 text-white px-4 py-2 rounded-lg shadow-lg flex items-center';
+                toastMessage.innerHTML = '<i class="fas fa-exclamation-circle mr-2"></i>' + message;
+            } else {
+                toast.className = 'fixed bottom-4 right-4 z-50 bg-blue-600 text-white px-4 py-2 rounded-lg shadow-lg flex items-center';
+                toastMessage.innerHTML = '<i class="fas fa-info-circle mr-2"></i>' + message;
+            }
+
+            toast.classList.remove('hidden');
+
+            // Hide after 3 seconds
+            setTimeout(() => {
+                toast.classList.add('hidden');
+            }, 3000);
+        }
+
+        // Load frame when camera changes
+        document.getElementById('camera-select').addEventListener('change', async (e) => {
+            currentCamera = e.target.value;
+            loadCameraFrame();
+        });
+
+        // Function to load camera frame
+        async function loadCameraFrame() {
+            showToast(`Loading ${currentCamera} frame...`, 'info');
+
+            const response = await fetch(`/get_frame/${currentCamera}`);
+            const data = await response.json();
+
+            if (data.status === 'success') {
+                frameElement.src = data.frame_url + '?t=' + new Date().getTime();
+
+                // Adjust the drawing layer to match the image dimensions
+                frameElement.onload = () => {
+                    drawingLayer.style.width = `${frameElement.naturalWidth}px`;
+                    drawingLayer.style.height = `${frameElement.naturalHeight}px`;
+                    drawingLayer.style.display = 'block';
+
+                    // Reinitialize the Konva stage with new dimensions
+                    stage.width(frameElement.naturalWidth);
+                    stage.height(frameElement.naturalHeight);
+
+                    showToast(`${currentCamera} frame loaded successfully`, 'success');
+                };
+            } else {
+                showToast(`Failed to load ${currentCamera} frame: ${data.message}`, 'error');
+            }
+        }
+
+        // Initialize Konva.js for adding points
+        const stage = new Konva.Stage({
+            container: 'drawing-layer',
+            width: 0,
+            height: 0,
+        });
+
+        const layer = new Konva.Layer();
+        stage.add(layer);
+
+        let currentPoints = [];
+        let pointMarkers = [];
+
+        // Click handler for the stage
+        stage.on('click', (e) => {
+            const pos = stage.getPointerPosition();
+
+            // Add a point marker
+            const point = new Konva.Circle({
+                x: pos.x,
+                y: pos.y,
+                radius: 6,
+                fill: '#FF1493',
+                stroke: 'white',
+                strokeWidth: 2,
+                draggable: true,
+            });
+
+            // Allow moving points
+            point.on('dragmove', () => {
+                updateLines();
+            });
+
+            layer.add(point);
+            pointMarkers.push(point);
+
+            // Add to points array
+            currentPoints.push([pos.x, pos.y]);
+
+            // Draw lines
+            updateLines();
+
+            layer.draw();
+        });
+
+        // Update polygon lines when points move
+        function updateLines() {
+            // Remove existing lines
+            layer.find('.polygon-line').destroy();
+
+            if (currentPoints.length < 2) return;
+
+            // Create lines between points
+            for (let i = 0; i < pointMarkers.length; i++) {
+                const start = pointMarkers[i];
+                const end = pointMarkers[(i + 1) % pointMarkers.length];
+
+                const line = new Konva.Line({
+                    points: [start.x(), start.y(), end.x(), end.y()],
+                    stroke: 'rgba(0, 255, 0, 0.8)',
+                    strokeWidth: 2,
+                    name: 'polygon-line',
+                    dash: [5, 2],
+                });
+
+                layer.add(line);
+                line.moveToBottom();
+            }
+
+            // Update points array from markers
+            currentPoints = pointMarkers.map(marker => [marker.x(), marker.y()]);
+
+            layer.draw();
+        }
+
+        // Save regions
+        document.getElementById('save-regions').addEventListener('click', async () => {
+            if (currentPoints.length > 2) {
+                // Create a polygon with collected points
+                const polygon = new Konva.Line({
+                    points: currentPoints.flat(),
+                    stroke: 'green',
+                    strokeWidth: 2,
+                    closed: true,
+                    fill: 'rgba(0, 255, 0, 0.2)',
+                });
+                layer.add(polygon);
+                layer.draw();
+
+                regions.push({
+                    vertices: currentPoints,
+                    color: 'green',
+                });
+
+                const response = await fetch('/update_regions', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        cam_id: currentCamera,
+                        regions: regions.map(r => ({
+                            vertices: r.vertices,
+                            color: r.color,
+                        })),
+                    }),
+                });
+                const data = await response.json();
+                showToast(data.message, data.status === 'success' ? 'success' : 'error');
+
+                // Reset for next polygon
+                currentPoints = [];
+                pointMarkers.forEach(marker => marker.destroy());
+                pointMarkers = [];
+            } else {
+                showToast("Please add at least three points to form a polygon.", "error");
+            }
+        });
+
+        // Clear regions
+        document.getElementById('clear-regions').addEventListener('click', () => {
+            // Clear all polygons and markers
+            layer.destroyChildren();
+            layer.draw();
+            currentPoints = [];
+            pointMarkers = [];
+            regions = [];
+            showToast("All regions cleared", "info");
+        });
+
+        // Reload camera
+        document.getElementById('reload-camera').addEventListener('click', () => {
+            loadCameraFrame();
+        });
+
+        // Save configuration
+        document.getElementById('save-config').addEventListener('click', () => {
+            const sahiBlocks = document.getElementById('sahi-blocks').value;
+            const frameSkip = document.getElementById('frame-skip').value;
+            const processDuration = document.getElementById('process-duration').value;
+            const saveInterval = document.getElementById('save-interval').value;
+
+            // This is a placeholder - in a real implementation, you'd send this data to the server
+            showToast("Configuration saved successfully", "success");
+
+            console.log({
+                sahiBlocks,
+                frameSkip,
+                processDuration,
+                saveInterval
+            });
+        });
+
+        // Load initial frame for the first camera
+        loadCameraFrame();
+    </script>
+</body>
+</html>
